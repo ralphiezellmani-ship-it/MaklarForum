@@ -40,6 +40,13 @@ export default async function ConsumerDashboardPage() {
       <QuestionCreateForm />
 
       <div className="mt-6 grid gap-4">
+        {own.length === 0 && questions.length > 0 ? (
+          <div className="card">
+            <p className="text-sm text-[var(--muted)]">
+              Du har inga egna frågor ännu. Frågor du ser under <Link href="/fragor" className="text-[var(--accent)]">Frågor & svar</Link> kan vara skapade av andra konsumenter.
+            </p>
+          </div>
+        ) : null}
         {own.map((question) => (
           <article key={question.id} className="card">
             <h2 className="text-lg font-semibold">{question.title}</h2>

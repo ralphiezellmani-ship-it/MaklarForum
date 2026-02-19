@@ -57,6 +57,11 @@ export default async function QuestionDetail({ params }: { params: Promise<{ slu
   return (
     <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
       <section className="card">
+        {currentUser ? (
+          <p className="mb-2 text-xs text-[var(--muted)]">
+            Inloggad som: {currentUser.role === "agent" ? "Mäklare" : currentUser.role === "admin" ? "Admin" : "Konsument"}
+          </p>
+        ) : null}
         <div className="mb-2 text-sm text-[var(--muted)]">Publicerad {formatDate(question.createdAt)}</div>
         <h1 className="text-3xl">{question.title}</h1>
         <p className="mt-4 text-[var(--muted)]">{question.body}</p>

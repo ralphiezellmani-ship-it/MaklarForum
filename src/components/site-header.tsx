@@ -12,6 +12,11 @@ const publicNav = [
 
 const agentNav = [{ href: "/forum", label: "Mäklarforum" }];
 const adminNav = [{ href: "/admin", label: "Admin" }];
+const roleLabel: Record<"consumer" | "agent" | "admin", string> = {
+  consumer: "Konsument",
+  agent: "Mäklare",
+  admin: "Admin",
+};
 
 export async function SiteHeader() {
   const user = await getCurrentUser();
@@ -34,9 +39,10 @@ export async function SiteHeader() {
           {user ? (
             <>
               <span className="hidden text-xs text-[var(--muted)] sm:inline">{user.fullName}</span>
+              <span className="pill pill-light">Inloggad som: {roleLabel[user.role]}</span>
               {user.role === "consumer" ? (
                 <Link href="/dashboard/konsument" className="pill pill-light">
-                  Min sida
+                  Konsumentpanel
                 </Link>
               ) : null}
               {user.role === "agent" ? (
