@@ -48,6 +48,17 @@ export default async function AgentDashboardPage() {
     <div>
       <h1 className="text-4xl">Mäklardashboard</h1>
       <p className="mt-2 text-[var(--muted)]">Svar, profilprestanda, bevakade kommuner och notifikationsinställningar.</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link href="/dashboard/maklare/profil" className="pill pill-dark">
+          Gå till min profil
+        </Link>
+        <Link href="/dashboard/maklare/fragor" className="pill pill-light">
+          Frågor att besvara
+        </Link>
+        <Link href="/dashboard/maklare/messages" className="pill pill-light">
+          Meddelanden
+        </Link>
+      </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-4">
         <div className="metric">

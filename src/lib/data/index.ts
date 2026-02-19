@@ -393,6 +393,97 @@ export async function getAgentGroupsForUser(userId: string): Promise<AgentGroup[
   }));
 }
 
+export async function getAgentDashboardQuestionFeed(userId: string): Promise<
+  Array<{
+    id: string;
+    slug: string;
+    title: string;
+    category: string;
+    geoScope: string;
+    municipality: string | null;
+    region: string | null;
+    createdAt: string;
+    answeredByMe: boolean;
+  }>
+> {
+  if (!hasSupabaseEnv()) {
+    return mockQuestions.slice(0, 20).map((question) => ({
+      id: question.id,
+      slug: question.slug,
+      title: question.title,
+      category: question.category,
+      geoScope: question.geoScope,
+      municipality: question.municipality ?? null,
+      region: question.region ?? null,
+      createdAt: question.createdAt,
+      answeredByMe: false,
+    }));
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const [{ data: profile }, { data: areaRows }, { data: answers }, { data: questions }] = await Promise.all([
+    supabase.from("profiles").select("city").eq("id", userId).maybeSingle(),
+    supabase.from("agent_areas").select("municipality, region").eq("agent_id", userId),
+    supabase.from("answers").select("question_id").eq("answered_by", userId),
+    supabase
+      .from("questions")
+      .select("id, question_slug, title, category, geo_scope, municipality, region, created_at")
+      .order("created_at", { ascending: false })
+      .limit(100),
+  ]);
+
+  if (!questions || questions.length === 0) {
+    return [];
+  }
+
+  const answeredIds = new Set((answers ?? []).map((row) => row.question_id));
+  const municipalities = new Set<string>();
+  const regions = new Set<string>();
+
+  if (profile?.city) {
+    municipalities.add(profile.city.toLowerCase());
+  }
+
+  for (const row of areaRows ?? []) {
+    if (row.municipality) municipalities.add(row.municipality.toLowerCase());
+    if (row.region) regions.add(row.region.toLowerCase());
+  }
+
+  const hasGeoPrefs = municipalities.size > 0 || regions.size > 0;
+
+  const visible = questions.filter((question) => {
+    if (!hasGeoPrefs) {
+      return true;
+    }
+
+    if (question.geo_scope === "open") {
+      return true;
+    }
+
+    if (question.geo_scope === "local") {
+      return municipalities.has((question.municipality ?? "").toLowerCase());
+    }
+
+    if (question.geo_scope === "regional") {
+      return regions.has((question.region ?? "").toLowerCase());
+    }
+
+    return true;
+  });
+
+  return visible.map((question) => ({
+    id: question.id,
+    slug: question.question_slug,
+    title: question.title,
+    category: question.category,
+    geoScope: question.geo_scope,
+    municipality: question.municipality,
+    region: question.region,
+    createdAt: question.created_at,
+    answeredByMe: answeredIds.has(question.id),
+  }));
+}
+
 export async function getWatchedThreads(userId: string): Promise<WatchedThread[]> {
   if (!hasSupabaseEnv()) {
     return [];

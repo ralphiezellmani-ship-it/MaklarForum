@@ -40,7 +40,7 @@ export async function SiteHeader() {
                 </Link>
               ) : null}
               {user.role === "agent" ? (
-                <Link href="/dashboard/maklare" className="pill pill-light">
+                <Link href="/dashboard/maklare/profil" className="pill pill-light">
                   Mäklarpanel
                 </Link>
               ) : null}

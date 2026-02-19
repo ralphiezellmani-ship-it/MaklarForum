@@ -24,6 +24,27 @@ export async function loginAction(_: { error?: string } | undefined, formData: F
     return { error: error.message };
   }
 
+  if (next === "/" || !next) {
+    const { data: authData } = await supabase.auth.getUser();
+    if (authData.user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", authData.user.id)
+        .maybeSingle();
+
+      if (profile?.role === "agent") {
+        redirect("/dashboard/maklare/profil");
+      }
+      if (profile?.role === "consumer") {
+        redirect("/dashboard/konsument");
+      }
+      if (profile?.role === "admin") {
+        redirect("/admin");
+      }
+    }
+  }
+
   redirect(next);
 }
 
@@ -33,7 +54,16 @@ export async function registerConsumerAction(_: { error?: string } | undefined, 
   const password = String(formData.get("password") ?? "").trim();
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        role: "consumer",
+        full_name: fullName,
+      },
+    },
+  });
 
   if (error) {
     return { error: error.message };
@@ -66,7 +96,19 @@ export async function registerAgentAction(_: { error?: string } | undefined, for
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        role: "agent",
+        full_name: fullName,
+        firm,
+        city,
+        fmi_number: fmiNumber,
+      },
+    },
+  });
 
   if (error) {
     return { error: error.message };
@@ -93,7 +135,7 @@ export async function registerAgentAction(_: { error?: string } | undefined, for
     });
   }
 
-  redirect("/dashboard/maklare");
+  redirect("/dashboard/maklare/profil");
 }
 
 export async function signOutAction() {

@@ -53,6 +53,9 @@ Om en anvandare redan skapats i `auth.users` men saknar rad i `profiles`:
 - `/maklare` och `/maklare/[slug]`
 - `/dashboard/konsument`
 - `/dashboard/maklare`
+- `/dashboard/maklare/profil`
+- `/dashboard/maklare/fragor`
+- `/dashboard/maklare/grupper`
 - `/admin`
 - `/priser`
 

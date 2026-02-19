@@ -10,6 +10,23 @@ export interface AuthUser {
   fullName: string;
 }
 
+function normalizeRole(input: unknown): UserRole {
+  if (input === "agent" || input === "admin" || input === "consumer") {
+    return input;
+  }
+  return "consumer";
+}
+
+function toProfileSlug(name: string, city: string) {
+  const base = `${name}-${city}`.trim();
+  return base
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 80);
+}
+
 export async function getCurrentUser(): Promise<AuthUser | null> {
   if (!hasSupabaseEnv()) {
     return null;
@@ -22,14 +39,64 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     return null;
   }
 
-  const { data: profile } = await supabase
+  let { data: profile } = await supabase
     .from("profiles")
     .select("id, email, full_name, role")
     .eq("id", authData.user.id)
-    .single();
+    .maybeSingle();
 
   if (!profile) {
-    return null;
+    const meta = authData.user.user_metadata ?? {};
+    const fullName = String(meta.full_name ?? authData.user.email?.split("@")[0] ?? "Användare").trim();
+    const city = String(meta.city ?? "").trim();
+    const firm = String(meta.firm ?? "").trim();
+    const role = normalizeRole(meta.role);
+
+    const insertPayload: {
+      id: string;
+      email: string;
+      full_name: string;
+      role: UserRole;
+      city?: string;
+      firm?: string;
+      fmi_number?: string;
+      verification_status?: "pending" | "verified" | "suspended";
+      profile_slug?: string;
+      accepted_terms_at?: string;
+    } = {
+      id: authData.user.id,
+      email: authData.user.email ?? "",
+      full_name: fullName || "Användare",
+      role,
+      accepted_terms_at: new Date().toISOString(),
+    };
+
+    if (city) insertPayload.city = city;
+    if (firm) insertPayload.firm = firm;
+    if (meta.fmi_number) insertPayload.fmi_number = String(meta.fmi_number);
+    if (role === "agent") {
+      insertPayload.verification_status = "pending";
+      if (fullName && city) {
+        insertPayload.profile_slug = toProfileSlug(fullName, city);
+      }
+    }
+
+    await supabase.from("profiles").upsert(insertPayload);
+    const retry = await supabase
+      .from("profiles")
+      .select("id, email, full_name, role")
+      .eq("id", authData.user.id)
+      .maybeSingle();
+    profile = retry.data ?? null;
+  }
+
+  if (!profile) {
+    return {
+      id: authData.user.id,
+      email: authData.user.email ?? "",
+      fullName: authData.user.email?.split("@")[0] ?? "Användare",
+      role: "consumer",
+    };
   }
 
   return {

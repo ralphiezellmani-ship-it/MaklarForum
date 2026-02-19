@@ -3,6 +3,8 @@ import { getCurrentUser } from "@/lib/auth";
 
 const tabs = [
   { href: "/dashboard/maklare", label: "Översikt" },
+  { href: "/dashboard/maklare/profil", label: "Min profil" },
+  { href: "/dashboard/maklare/fragor", label: "Frågor" },
   { href: "/dashboard/maklare/messages", label: "Meddelanden" },
   { href: "/dashboard/maklare/grupper", label: "Grupper" },
   { href: "/forum", label: "Internt forum" },
