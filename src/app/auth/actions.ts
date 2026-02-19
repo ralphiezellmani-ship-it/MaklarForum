@@ -25,33 +25,42 @@ export async function loginAction(_: { error?: string } | undefined, formData: F
     return { error: error.message };
   }
 
-  if (next === "/" || !next) {
-    const { data: authData } = await supabase.auth.getUser();
-    if (authData.user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", authData.user.id)
-        .maybeSingle();
+  const { data: authData } = await supabase.auth.getUser();
+  const profile = authData.user
+    ? (
+        await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", authData.user.id)
+          .maybeSingle()
+      ).data
+    : null;
 
-      if (profile?.role === "agent") {
-        redirect("/dashboard/maklare/profil");
-      }
-      if (profile?.role === "consumer") {
-        redirect("/dashboard/konsument");
-      }
-      if (profile?.role === "admin") {
-        redirect("/admin");
-      }
-    }
-
-    if (portal === "agent") {
-      redirect("/dashboard/maklare/profil");
-    }
-    redirect("/dashboard/konsument");
+  // If user explicitly chose agent login, enforce agent/admin role.
+  if (portal === "agent" && profile?.role !== "agent" && profile?.role !== "admin") {
+    await supabase.auth.signOut();
+    return { error: "Detta konto är inte registrerat som mäklare. Använd kundinloggning eller kontakta admin." };
   }
 
-  redirect(next);
+  const role = profile?.role ?? (portal === "agent" ? "agent" : "consumer");
+  const roleHome = role === "agent" ? "/dashboard/maklare/profil" : role === "admin" ? "/admin" : "/dashboard/konsument";
+
+  const isSafeNext = typeof next === "string" && next.startsWith("/");
+  if (!isSafeNext || next === "/") {
+    redirect(roleHome);
+  }
+
+  // Prevent cross-portal redirects (e.g. agent ending up on consumer dashboard via stale next param).
+  const nextPath = next;
+  const invalidForAgent = role === "agent" && nextPath.startsWith("/dashboard/konsument");
+  const invalidForConsumer = role === "consumer" && (nextPath.startsWith("/dashboard/maklare") || nextPath.startsWith("/forum") || nextPath.startsWith("/admin"));
+  const invalidForAdmin = role === "admin" && nextPath.startsWith("/dashboard/konsument");
+
+  if (invalidForAgent || invalidForConsumer || invalidForAdmin) {
+    redirect(roleHome);
+  }
+
+  redirect(nextPath);
 }
 
 export async function registerConsumerAction(_: { error?: string } | undefined, formData: FormData) {
