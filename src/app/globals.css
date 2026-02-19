@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+:root {
+  --sand: #f3f1ec;
+  --paper: #fffdf8;
+  --ink: #16202a;
+  --muted: #5d6872;
+  --line: #d7d2c5;
+  --accent: #0f766e;
+  --gold: #b88a2c;
+  --font-sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", serif;
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 15% 15%, #fff6d8 0%, transparent 35%),
+    radial-gradient(circle at 85% 30%, #dff6ef 0%, transparent 34%),
+    var(--sand);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--paper);
+  padding: 20px;
+  box-shadow: 0 8px 30px rgba(22, 32, 42, 0.05);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.48rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.pill-light {
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.pill-dark {
+  border: 1px solid #0d4042;
+  background: #104a4d;
+  color: #f8fcfb;
+}
+
+.pill-gold {
+  border: 1px solid #9b7323;
+  background: #f8e7b8;
+  color: #5a430f;
+}
+
+.nav-link {
+  color: var(--muted);
+  transition: color 120ms ease;
+}
+
+.nav-link:hover {
+  color: var(--ink);
+}
+
+.metric {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  background: white;
+}

@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Maklarforum.se
 
-## Getting Started
+Fullstack grund for Maklarforum enligt produktspec v2.0 (februari 2026).
 
-First, run the development server:
+## Ingar i denna version
+- Supabase auth (login, registrering konsument/maklare, logout)
+- Rollstyrda dashboards (konsument, maklare, admin)
+- Admin-funktioner: verifiera maklare, neka, ta bort konto, byt maklarens e-post med bevarat profil-id
+- Publik Q&A och maklarprofiler med live-data mot Supabase (fallback till mockdata lokalt)
+- Modereringsfilter i svarsflode
+- Stripe Premium checkout endpoint + webhook sync
+- Fortnox sync-ko (db-tabell) for invoice-events
+- Juridiksidor, guider, ordlista och SEO-grund
 
+## Snabbstart
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Oppna [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Miljovariabler
+Kopiera `.env.example` till `.env.local` och fyll i:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PREMIUM_PRICE_ID`
+- `NEXT_PUBLIC_SITE_URL`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Databas
+Kor migrationerna i ordning:
+- `supabase/migrations/20260218_init.sql`
+- `supabase/migrations/20260218_billing.sql`
 
-## Learn More
+Promotera ditt konto till admin efter forsta inloggningen:
+- Kor `supabase/sql/promote_admin.sql` och byt e-post till din riktiga adress.
 
-To learn more about Next.js, take a look at the following resources:
+## Viktiga routes
+- `/login`
+- `/register/consumer`
+- `/register/maklare`
+- `/fragor` och `/fragor/[slug]`
+- `/maklare` och `/maklare/[slug]`
+- `/dashboard/konsument`
+- `/dashboard/maklare`
+- `/admin`
+- `/priser`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Stripe setup
+1. Skapa produkt + pris i Stripe (manadsplan Premium).
+2. Satt `STRIPE_PREMIUM_PRICE_ID`.
+3. Satt webhook endpoint till `/api/stripe/webhook` och lyssna pa:
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   - `invoice.paid`
+   - `invoice.payment_failed`
+4. Checkout startas fran `/priser` nar inloggad maklare klickar "Aktivera Premium".
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Fortnox
+Webhooken skapar poster i `fortnox_sync_queue` for invoice-events.
+Nasta steg ar worker som plockar pending-poster och skickar till Fortnox API.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Kommentar
+Nuvarande implementation ar produktionsredo i struktur och auth/dataflode.
+Kvarvarande integrationer ar Fortnox worker och Resend mallar/notisleverans.
