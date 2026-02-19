@@ -1,7 +1,7 @@
 import { agents as mockAgents, answers as mockAnswers, questions as mockQuestions } from "@/lib/mock-data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import { AgentGroup, ConversationMessage, MessageThread, PendingModerationItem, WatchedThread } from "@/lib/types";
+import { AgentGroup, AgentTip, ConversationMessage, MessageThread, PendingModerationItem, WatchedThread } from "@/lib/types";
 
 export async function getQuestions() {
   if (!hasSupabaseEnv()) {
@@ -46,12 +46,15 @@ export async function getQuestionBySlug(slug: string) {
   return questions.find((q) => q.slug === slug) ?? null;
 }
 
-export async function getAnswersForQuestion(questionId: string) {
+export async function getAnswersForQuestion(questionId: string, viewerId?: string) {
   if (!hasSupabaseEnv()) {
     return mockAnswers
       .filter((answer) => answer.questionId === questionId)
       .map((answer) => ({
         ...answer,
+        upVotes: 0,
+        downVotes: 0,
+        myVote: 0 as const,
         agent: mockAgents.find((agent) => agent.id === answer.answeredBy) ?? null,
       }));
   }
@@ -67,22 +70,46 @@ export async function getAnswersForQuestion(questionId: string) {
     return [];
   }
 
-  const ids = [...new Set(data.map((row) => row.answered_by))];
-  const { data: agentProfiles } = await supabase
-    .from("profiles")
-    .select("id, full_name, profile_slug, firm, title, city, bio, fmi_number, verification_status, subscription_status")
-    .in("id", ids);
+  const agentIds = [...new Set(data.map((row) => row.answered_by))];
+  const answerIds = data.map((row) => row.id);
+  const [{ data: agentProfiles }, { data: voteRows }, { data: myVotes }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, full_name, profile_slug, firm, title, city, bio, fmi_number, verification_status, subscription_status")
+      .in("id", agentIds),
+    supabase.from("answer_votes").select("answer_id, vote").in("answer_id", answerIds),
+    viewerId
+      ? supabase.from("answer_votes").select("answer_id, vote").eq("consumer_id", viewerId).in("answer_id", answerIds)
+      : Promise.resolve({ data: [] as Array<{ answer_id: string; vote: number }> }),
+  ]);
 
-  const agentMap = new Map((agentProfiles ?? []).map((a) => [a.id, a]));
+  const agentMap = new Map((agentProfiles ?? []).map((agent) => [agent.id, agent]));
+  const voteBuckets = new Map<string, { up: number; down: number }>();
+  for (const vote of voteRows ?? []) {
+    const bucket = voteBuckets.get(vote.answer_id) ?? { up: 0, down: 0 };
+    if (vote.vote === 1) bucket.up += 1;
+    if (vote.vote === -1) bucket.down += 1;
+    voteBuckets.set(vote.answer_id, bucket);
+  }
+  const myVoteMap = new Map<string, -1 | 0 | 1>();
+  for (const vote of myVotes ?? []) {
+    myVoteMap.set(vote.answer_id, vote.vote === -1 ? -1 : 1);
+  }
 
-  return data.map((row) => {
+  return data
+    .map((row) => {
     const agent = agentMap.get(row.answered_by);
+      const bucket = voteBuckets.get(row.id) ?? { up: 0, down: 0 };
+      const score = bucket.up - bucket.down;
     return {
       id: row.id,
       questionId: row.question_id,
       answeredBy: row.answered_by,
       body: row.body,
-      helpfulVotes: row.helpful_votes,
+        helpfulVotes: score,
+        upVotes: bucket.up,
+        downVotes: bucket.down,
+        myVote: myVoteMap.get(row.id) ?? 0,
       createdAt: row.created_at,
       agent: agent
         ? {
@@ -103,7 +130,11 @@ export async function getAnswersForQuestion(questionId: string) {
           }
         : null,
     };
-  });
+    })
+    .sort((a, b) => {
+      if (b.helpfulVotes !== a.helpfulVotes) return b.helpfulVotes - a.helpfulVotes;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 }
 
 export async function getAgents() {
@@ -168,14 +199,22 @@ export async function getAnswersByAgent(agentId: string) {
   }
 
   const questionIds = [...new Set(data.map((row) => row.question_id))];
-  const { data: questions } = await supabase.from("questions").select("id, title").in("id", questionIds);
+  const answerIds = data.map((row) => row.id);
+  const [{ data: questions }, { data: votes }] = await Promise.all([
+    supabase.from("questions").select("id, title").in("id", questionIds),
+    supabase.from("answer_votes").select("answer_id, vote").in("answer_id", answerIds),
+  ]);
   const questionMap = new Map((questions ?? []).map((question) => [question.id, question]));
+  const voteMap = new Map<string, number>();
+  for (const vote of votes ?? []) {
+    voteMap.set(vote.answer_id, (voteMap.get(vote.answer_id) ?? 0) + (vote.vote === -1 ? -1 : 1));
+  }
 
   return data.map((row) => ({
     id: row.id,
     questionId: row.question_id,
     body: row.body,
-    helpfulVotes: row.helpful_votes,
+    helpfulVotes: voteMap.get(row.id) ?? 0,
     createdAt: row.created_at,
     question: questionMap.get(row.question_id) ?? null,
   }));
@@ -653,4 +692,75 @@ export async function getVerifiedAgentRecipients() {
     id: agent.id,
     name: `${agent.full_name}${agent.city ? ` - ${agent.city}` : ""}${agent.firm ? ` (${agent.firm})` : ""}`,
   }));
+}
+
+export async function getAgentTips(viewerId?: string, limit = 20): Promise<AgentTip[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: rows } = await supabase
+    .from("agent_tips")
+    .select("id, author_id, title, body, audience, geo_scope, municipality, region, created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (!rows || rows.length === 0) {
+    return [];
+  }
+
+  const tipIds = rows.map((row) => row.id);
+  const authorIds = [...new Set(rows.map((row) => row.author_id))];
+  const [{ data: authors }, { data: voteRows }, { data: myVotes }] = await Promise.all([
+    supabase.from("profiles").select("id, full_name").in("id", authorIds),
+    supabase.from("agent_tip_votes").select("tip_id, vote").in("tip_id", tipIds),
+    viewerId
+      ? supabase.from("agent_tip_votes").select("tip_id, vote").eq("consumer_id", viewerId).in("tip_id", tipIds)
+      : Promise.resolve({ data: [] as Array<{ tip_id: string; vote: number }> }),
+  ]);
+
+  const authorMap = new Map((authors ?? []).map((author) => [author.id, author.full_name]));
+  const voteMap = new Map<string, { up: number; down: number }>();
+  for (const vote of voteRows ?? []) {
+    const bucket = voteMap.get(vote.tip_id) ?? { up: 0, down: 0 };
+    if (vote.vote === 1) bucket.up += 1;
+    if (vote.vote === -1) bucket.down += 1;
+    voteMap.set(vote.tip_id, bucket);
+  }
+
+  const myVoteMap = new Map<string, -1 | 0 | 1>();
+  for (const vote of myVotes ?? []) {
+    myVoteMap.set(vote.tip_id, vote.vote === -1 ? -1 : 1);
+  }
+
+  return rows
+    .map((row) => {
+      const votes = voteMap.get(row.id) ?? { up: 0, down: 0 };
+      return {
+        id: row.id,
+        authorId: row.author_id,
+        authorName: authorMap.get(row.author_id) ?? "Mäklare",
+        title: row.title,
+        body: row.body,
+        audience: row.audience,
+        geoScope: row.geo_scope,
+        municipality: row.municipality ?? undefined,
+        region: row.region ?? undefined,
+        score: votes.up - votes.down,
+        upVotes: votes.up,
+        downVotes: votes.down,
+        myVote: myVoteMap.get(row.id) ?? 0,
+        createdAt: row.created_at,
+      };
+    })
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+}
+
+export async function getAgentTipsByAuthor(authorId: string, viewerId?: string) {
+  const all = await getAgentTips(viewerId, 100);
+  return all.filter((tip) => tip.authorId === authorId);
 }

@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AgentProfileForm } from "@/components/agent-profile-form";
 import { MessageComposeForm } from "@/components/message-compose-form";
 import { formatDate } from "@/lib/format";
-import { getAgentLeadMetrics, getAgentProfile, getMessageThreads, getPotentialMessageRecipientsFromWatched, getWatchedThreads } from "@/lib/data";
+import { getAgentLeadMetrics, getAgentProfile, getMessageThreads, getWatchedThreads } from "@/lib/data";
 import { sendMessageAction } from "@/app/dashboard/maklare/actions";
 import Link from "next/link";
 
@@ -25,22 +25,18 @@ export default async function AgentDashboardPage() {
   const user = await requireRole("agent", "/dashboard/maklare");
   const supabase = await createSupabaseServerClient();
 
-  const [{ count: answerCount }, { count: profileViews }, { data: profile }, watchedThreads, messageThreads, watchedRecipients, agentProfile, leadMetrics] = await Promise.all([
+  const [{ count: answerCount }, { count: profileViews }, { data: profile }, watchedThreads, messageThreads, agentProfile, leadMetrics] = await Promise.all([
     supabase.from("answers").select("id", { count: "exact", head: true }).eq("answered_by", user.id),
     supabase.from("questions").select("id", { count: "exact", head: true }),
     supabase.from("profiles").select("verification_status, subscription_status, city, firm").eq("id", user.id).single(),
     getWatchedThreads(user.id),
     getMessageThreads(user.id),
-    getPotentialMessageRecipientsFromWatched(user.id),
     getAgentProfile(user.id),
     getAgentLeadMetrics(user.id),
   ]);
   const recipientsMap = new Map<string, { id: string; name: string }>();
   for (const thread of messageThreads) {
     recipientsMap.set(thread.otherUserId, { id: thread.otherUserId, name: thread.otherUserName });
-  }
-  for (const recipient of watchedRecipients) {
-    recipientsMap.set(recipient.id, recipient);
   }
   const recipients = [...recipientsMap.values()];
 
@@ -149,7 +145,11 @@ export default async function AgentDashboardPage() {
 
           <div className="mt-5 border-t border-[var(--line)] pt-4">
             <h3 className="mb-2 text-sm font-semibold">Skicka nytt meddelande</h3>
-            <MessageComposeForm recipients={recipients} action={sendMessageAction} />
+            {recipients.length === 0 ? (
+              <p className="text-sm text-[var(--muted)]">En kund behöver initiera dialog först innan du kan skriva här.</p>
+            ) : (
+              <MessageComposeForm recipients={recipients} action={sendMessageAction} />
+            )}
           </div>
         </article>
       </section>

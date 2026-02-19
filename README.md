@@ -38,12 +38,16 @@ Kor migrationerna i ordning:
 - `supabase/migrations/20260219_engagement_policies.sql`
 - `supabase/migrations/20260219_messages_update_policy.sql`
 - `supabase/migrations/20260219_groups_leads_moderation.sql`
+- `supabase/migrations/20260219_qna_votes_blocks_tips.sql`
 
 Promotera ditt konto till admin efter forsta inloggningen:
 - Kor `supabase/sql/promote_admin.sql` och byt e-post till din riktiga adress.
 
 Om en anvandare redan skapats i `auth.users` men saknar rad i `profiles`:
 - Kor `supabase/sql/fix_profile_for_existing_user.sql` och byt e-post i filen.
+
+For att snabbt testa Q&A:
+- Kor `supabase/sql/create_test_question.sql` och byt till en riktig konsument-e-post.
 
 ## Viktiga routes
 - `/login`

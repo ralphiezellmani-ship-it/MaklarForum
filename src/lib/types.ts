@@ -45,6 +45,9 @@ export interface Answer {
   answeredBy: string;
   body: string;
   helpfulVotes: number;
+  upVotes?: number;
+  downVotes?: number;
+  myVote?: -1 | 0 | 1;
   createdAt: string;
   comment?: string;
 }
@@ -112,5 +115,22 @@ export interface PendingModerationItem {
   proposedByName: string;
   body: string;
   blockedTerms: string[];
+  createdAt: string;
+}
+
+export interface AgentTip {
+  id: string;
+  authorId: string;
+  authorName: string;
+  title: string;
+  body: string;
+  audience: "buyer" | "seller" | "general";
+  geoScope: "local" | "regional" | "open";
+  municipality?: string;
+  region?: string;
+  score: number;
+  upVotes: number;
+  downVotes: number;
+  myVote: -1 | 0 | 1;
   createdAt: string;
 }

@@ -14,6 +14,18 @@ export async function sendConsumerMessageAction(_: { error?: string; success?: s
   }
 
   const supabase = await createSupabaseServerClient();
+  const { data: blocked } = await supabase
+    .from("user_blocks")
+    .select("blocked_id")
+    .eq("blocker_id", user.id)
+    .eq("blocked_id", receiverId)
+    .limit(1)
+    .maybeSingle();
+
+  if (blocked) {
+    return { error: "Du har blockerat den här mäklaren. Avblockera först för att skicka meddelande." };
+  }
+
   const { error } = await supabase.from("messages").insert({
     sender_id: user.id,
     receiver_id: receiverId,
@@ -42,6 +54,18 @@ export async function sendConsumerConversationMessageAction(
   }
 
   const supabase = await createSupabaseServerClient();
+  const { data: blocked } = await supabase
+    .from("user_blocks")
+    .select("blocked_id")
+    .eq("blocker_id", user.id)
+    .eq("blocked_id", otherUserId)
+    .limit(1)
+    .maybeSingle();
+
+  if (blocked) {
+    return { error: "Du har blockerat den här mäklaren. Avblockera först för att skicka meddelande." };
+  }
+
   const { error } = await supabase.from("messages").insert({
     sender_id: user.id,
     receiver_id: otherUserId,
@@ -57,4 +81,27 @@ export async function sendConsumerConversationMessageAction(
   revalidatePath("/dashboard/konsument");
 
   return { success: "Meddelandet skickades." };
+}
+
+export async function blockAgentAction(otherUserId: string) {
+  const user = await requireRole("consumer", `/dashboard/konsument/messages/${otherUserId}`);
+  const supabase = await createSupabaseServerClient();
+
+  await supabase.from("user_blocks").upsert({
+    blocker_id: user.id,
+    blocked_id: otherUserId,
+  });
+
+  revalidatePath(`/dashboard/konsument/messages/${otherUserId}`);
+  revalidatePath("/dashboard/konsument/messages");
+}
+
+export async function unblockAgentAction(otherUserId: string) {
+  const user = await requireRole("consumer", `/dashboard/konsument/messages/${otherUserId}`);
+  const supabase = await createSupabaseServerClient();
+
+  await supabase.from("user_blocks").delete().eq("blocker_id", user.id).eq("blocked_id", otherUserId);
+
+  revalidatePath(`/dashboard/konsument/messages/${otherUserId}`);
+  revalidatePath("/dashboard/konsument/messages");
 }

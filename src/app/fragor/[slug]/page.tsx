@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AnswerComposer } from "@/components/answer-composer";
 import { WatchThreadButton } from "@/components/watch-thread-button";
+import { AnswerVoteControls } from "@/components/answer-vote-controls";
 import { formatDate } from "@/lib/format";
 import { getAnswersForQuestion, getQuestionBySlug } from "@/lib/data";
 import { submitAnswerAction } from "@/app/fragor/actions";
@@ -37,9 +38,9 @@ export default async function QuestionDetail({ params }: { params: Promise<{ slu
     notFound();
   }
 
-  const questionAnswers = await getAnswersForQuestion(question.id);
-  const boundSubmitAction = submitAnswerAction.bind(null, question.id, slug);
   const currentUser = await getCurrentUser();
+  const questionAnswers = await getAnswersForQuestion(question.id, currentUser?.id);
+  const boundSubmitAction = submitAnswerAction.bind(null, question.id, slug);
   let watching = false;
 
   if (currentUser && hasSupabaseEnv()) {
@@ -71,10 +72,20 @@ export default async function QuestionDetail({ params }: { params: Promise<{ slu
         ) : null}
       </section>
 
-      <AnswerComposer action={boundSubmitAction} />
+      {currentUser?.role === "agent" ? (
+        <AnswerComposer action={boundSubmitAction} />
+      ) : (
+        <section className="card">
+          <h3 className="text-lg font-semibold">Svara som mäklare</h3>
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            Endast verifierade mäklare kan svara på frågor. Konsumenter kan rösta på svar med tumme upp eller ner.
+          </p>
+        </section>
+      )}
 
       <section className="space-y-4 lg:col-span-2">
         <h2 className="text-2xl">Svar från mäklare</h2>
+        {questionAnswers.length === 0 ? <p className="text-sm text-[var(--muted)]">Inga svar ännu. Verifierade mäklare kan svara direkt.</p> : null}
         {questionAnswers.map((answer) => (
           <article key={answer.id} className="card">
             <div className="mb-2 flex items-center justify-between text-sm">
@@ -85,6 +96,15 @@ export default async function QuestionDetail({ params }: { params: Promise<{ slu
               <span className="pill pill-light">{answer.helpfulVotes} hjälpsamt</span>
             </div>
             <p className="text-sm leading-6">{answer.body}</p>
+            {currentUser?.role === "consumer" ? (
+              <AnswerVoteControls
+                answerId={answer.id}
+                slug={slug}
+                myVote={answer.myVote ?? 0}
+                upVotes={answer.upVotes ?? 0}
+                downVotes={answer.downVotes ?? 0}
+              />
+            ) : null}
           </article>
         ))}
       </section>

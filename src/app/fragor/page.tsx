@@ -1,8 +1,12 @@
 import { QuestionCard } from "@/components/question-card";
-import { getQuestions } from "@/lib/data";
+import { TipVoteControls } from "@/components/tip-vote-controls";
+import { getCurrentUser } from "@/lib/auth";
+import { formatDate } from "@/lib/format";
+import { getAgentTips, getQuestions } from "@/lib/data";
 
 export default async function QuestionsPage() {
-  const questions = await getQuestions();
+  const user = await getCurrentUser();
+  const [questions, tips] = await Promise.all([getQuestions(), getAgentTips(user?.id)]);
 
   return (
     <div>
@@ -15,6 +19,35 @@ export default async function QuestionsPage() {
           <QuestionCard key={question.id} question={question} />
         ))}
       </div>
+
+      <section className="mt-8 card">
+        <h2 className="text-2xl">Tips & trix från mäklare</h2>
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          Konsumenter kan rösta upp eller ner för att lyfta de mest hjälpsamma tipsen.
+        </p>
+        <div className="mt-4 space-y-3">
+          {tips.length === 0 ? <p className="text-sm text-[var(--muted)]">Inga tips publicerade ännu.</p> : null}
+          {tips.map((tip) => (
+            <article key={tip.id} className="rounded-xl border border-[var(--line)] bg-white p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium">{tip.title}</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {tip.authorName} • {tip.audience} • {tip.geoScope}
+                    {tip.municipality ? ` • ${tip.municipality}` : ""}
+                    {tip.region ? `, ${tip.region}` : ""} • {formatDate(tip.createdAt)}
+                  </p>
+                </div>
+                <span className="pill pill-light">Score: {tip.score}</span>
+              </div>
+              <p className="mt-2 text-sm">{tip.body}</p>
+              {user?.role === "consumer" ? (
+                <TipVoteControls tipId={tip.id} myVote={tip.myVote} upVotes={tip.upVotes} downVotes={tip.downVotes} />
+              ) : null}
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
