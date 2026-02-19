@@ -1,13 +1,20 @@
 "use client";
 
 import { useActionState } from "react";
-import { sendMessageAction } from "@/app/dashboard/maklare/actions";
 
-export function MessageComposeForm({ recipients }: { recipients: Array<{ id: string; name: string }> }) {
-  const [state, action, pending] = useActionState(sendMessageAction, undefined);
+type ActionState = { error?: string; success?: string };
+
+export function MessageComposeForm({
+  recipients,
+  action,
+}: {
+  recipients: Array<{ id: string; name: string }>;
+  action: (state: ActionState | undefined, formData: FormData) => Promise<ActionState>;
+}) {
+  const [state, formAction, pending] = useActionState(action, undefined);
 
   return (
-    <form action={action} className="grid gap-3 text-sm">
+    <form action={formAction} className="grid gap-3 text-sm">
       <label>
         Mottagare
         <select name="receiver_id" required className="mt-1 w-full rounded-xl border border-[var(--line)] p-2">

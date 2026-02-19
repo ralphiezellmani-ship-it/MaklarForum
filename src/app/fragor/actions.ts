@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole, requireUser } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { canPublish } from "@/lib/moderation";
 
 type AnswerState = { error?: string; success?: string };
@@ -11,6 +11,7 @@ type AskState = { error?: string; success?: string };
 
 export async function submitAnswerAction(questionId: string, slug: string, _: AnswerState | undefined, formData: FormData) {
   const user = await requireRole("agent", `/fragor/${slug}`);
+  const supabase = await createSupabaseServerClient();
 
   const body = String(formData.get("body") ?? "").trim();
   if (!body) {
@@ -19,10 +20,20 @@ export async function submitAnswerAction(questionId: string, slug: string, _: An
 
   const moderation = canPublish(body);
   if (!moderation.ok) {
-    return { error: `Svar blockerat. Otillåtna ord: ${moderation.blocked.join(", ")}` };
+    const { error: moderationError } = await supabase.from("moderation_queue").insert({
+      item_type: "answer",
+      question_id: questionId,
+      proposed_by: user.id,
+      body,
+      blocked_terms: moderation.blocked,
+      status: "pending",
+    });
+    if (moderationError) {
+      return { error: moderationError.message };
+    }
+    revalidatePath("/admin");
+    return { success: "Svar skickat till admin för granskning innan publicering." };
   }
-
-  const supabase = await createSupabaseServerClient();
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -71,20 +82,71 @@ export async function askQuestionAction(_: AskState | undefined, formData: FormD
     .slice(0, 80);
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("questions").insert({
-    asked_by: user.id,
-    title,
-    question_slug: `${slug}-${Date.now().toString().slice(-6)}`,
-    body,
-    audience,
-    category,
-    geo_scope: geoScope,
-    municipality: municipality || null,
-    region: region || null,
-  });
+  const { data: insertedQuestion, error } = await supabase
+    .from("questions")
+    .insert({
+      asked_by: user.id,
+      title,
+      question_slug: `${slug}-${Date.now().toString().slice(-6)}`,
+      body,
+      audience,
+      category,
+      geo_scope: geoScope,
+      municipality: municipality || null,
+      region: region || null,
+    })
+    .select("id, geo_scope, municipality, region")
+    .single();
 
   if (error) {
     return { error: error.message };
+  }
+
+  if (insertedQuestion) {
+    const admin = createSupabaseAdminClient();
+    const { data: verifiedAgents } = await admin
+      .from("profiles")
+      .select("id, city")
+      .eq("role", "agent")
+      .eq("verification_status", "verified");
+    const verifiedSet = new Set((verifiedAgents ?? []).map((agent) => agent.id));
+
+    let recipientIds = (verifiedAgents ?? []).map((agent) => agent.id);
+
+    if ((insertedQuestion.geo_scope === "local" || insertedQuestion.geo_scope === "regional") && (insertedQuestion.municipality || insertedQuestion.region)) {
+      const { data: areaMatches } = await admin
+        .from("agent_areas")
+        .select("agent_id, municipality, region");
+
+      const localMunicipality = (insertedQuestion.municipality ?? "").toLowerCase();
+      const localRegion = (insertedQuestion.region ?? "").toLowerCase();
+
+      recipientIds = (areaMatches ?? [])
+        .filter((area) => {
+          if (insertedQuestion.geo_scope === "local") {
+            return (area.municipality ?? "").toLowerCase() === localMunicipality;
+          }
+          return (area.region ?? "").toLowerCase() === localRegion;
+        })
+        .map((area) => area.agent_id);
+    }
+
+    recipientIds = [...new Set(recipientIds)].filter((id) => verifiedSet.has(id));
+
+    if (recipientIds.length > 0) {
+      await admin.from("lead_dispatch_logs").insert(
+        recipientIds.map((agentId) => ({
+          agent_id: agentId,
+          question_id: insertedQuestion.id,
+          dispatch_type: "tip",
+          status: "sent",
+          payload: {
+            source: "question_created",
+          },
+          dispatched_at: new Date().toISOString(),
+        })),
+      );
+    }
   }
 
   revalidatePath("/fragor");

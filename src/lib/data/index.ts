@@ -1,7 +1,7 @@
 import { agents as mockAgents, answers as mockAnswers, questions as mockQuestions } from "@/lib/mock-data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import { ConversationMessage, MessageThread, WatchedThread } from "@/lib/types";
+import { AgentGroup, ConversationMessage, MessageThread, PendingModerationItem, WatchedThread } from "@/lib/types";
 
 export async function getQuestions() {
   if (!hasSupabaseEnv()) {
@@ -224,6 +224,76 @@ export async function getAdminMetrics() {
   };
 }
 
+export async function getPendingGroupApprovals() {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("agent_groups")
+    .select("id, name, municipality, region, created_at, created_by")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+
+  if (!data || data.length === 0) {
+    return [];
+  }
+
+  const creatorIds = [...new Set(data.map((row) => row.created_by))];
+  const { data: creators } = await supabase.from("profiles").select("id, full_name").in("id", creatorIds);
+  const creatorMap = new Map((creators ?? []).map((creator) => [creator.id, creator.full_name]));
+
+  return data.map((row) => ({
+    id: row.id,
+    name: row.name,
+    municipality: row.municipality ?? "",
+    region: row.region ?? "",
+    createdAt: row.created_at,
+    createdBy: creatorMap.get(row.created_by) ?? "Mäklare",
+  }));
+}
+
+export async function getPendingModerationItems(): Promise<PendingModerationItem[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: rows } = await supabase
+    .from("moderation_queue")
+    .select("id, question_id, proposed_by, body, blocked_terms, created_at")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+
+  if (!rows || rows.length === 0) {
+    return [];
+  }
+
+  const questionIds = [...new Set(rows.map((row) => row.question_id).filter(Boolean))] as string[];
+  const proposerIds = [...new Set(rows.map((row) => row.proposed_by))];
+
+  const { data: questions } =
+    questionIds.length > 0
+      ? await supabase.from("questions").select("id, title").in("id", questionIds)
+      : { data: [] as Array<{ id: string; title: string }> };
+  const { data: proposers } = await supabase.from("profiles").select("id, full_name").in("id", proposerIds);
+
+  const questionMap = new Map((questions ?? []).map((question) => [question.id, question.title]));
+  const proposerMap = new Map((proposers ?? []).map((profile) => [profile.id, profile.full_name]));
+
+  return rows.map((row) => ({
+    id: row.id,
+    questionId: row.question_id,
+    questionTitle: row.question_id ? (questionMap.get(row.question_id) ?? "Okänd fråga") : "Okänd fråga",
+    proposedBy: row.proposed_by,
+    proposedByName: proposerMap.get(row.proposed_by) ?? "Mäklare",
+    body: row.body,
+    blockedTerms: row.blocked_terms ?? [],
+    createdAt: row.created_at,
+  }));
+}
+
 export async function getAgentProfile(userId: string) {
   if (!hasSupabaseEnv()) {
     return mockAgents[0];
@@ -256,6 +326,71 @@ export async function getAgentProfile(userId: string) {
     activeCount: 0,
     profileViews: 0,
   };
+}
+
+export async function getAgentLeadMetrics(userId: string) {
+  if (!hasSupabaseEnv()) {
+    return { sentTotal: 0, sentLast30Days: 0 };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [{ count: sentTotal }, { count: sentLast30Days }] = await Promise.all([
+    supabase.from("lead_dispatch_logs").select("id", { count: "exact", head: true }).eq("agent_id", userId).eq("status", "sent"),
+    supabase
+      .from("lead_dispatch_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("agent_id", userId)
+      .eq("status", "sent")
+      .gte("created_at", since),
+  ]);
+
+  return {
+    sentTotal: sentTotal ?? 0,
+    sentLast30Days: sentLast30Days ?? 0,
+  };
+}
+
+export async function getAgentGroupsForUser(userId: string): Promise<AgentGroup[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const [{ data: groups }, { data: memberships }] = await Promise.all([
+    supabase
+      .from("agent_groups")
+      .select("id, name, slug, description, municipality, region, status")
+      .in("status", ["approved", "pending"])
+      .order("name", { ascending: true }),
+    supabase.from("agent_group_members").select("group_id").eq("agent_id", userId),
+  ]);
+
+  if (!groups || groups.length === 0) {
+    return [];
+  }
+
+  const groupIds = groups.map((group) => group.id);
+  const { data: allMembers } = await supabase.from("agent_group_members").select("group_id").in("group_id", groupIds);
+  const memberCountMap = new Map<string, number>();
+  for (const member of allMembers ?? []) {
+    memberCountMap.set(member.group_id, (memberCountMap.get(member.group_id) ?? 0) + 1);
+  }
+
+  const joined = new Set((memberships ?? []).map((row) => row.group_id));
+
+  return groups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    slug: group.slug,
+    description: group.description ?? "",
+    municipality: group.municipality ?? "",
+    region: group.region ?? "",
+    status: group.status,
+    memberCount: memberCountMap.get(group.id) ?? 0,
+    isMember: joined.has(group.id),
+  }));
 }
 
 export async function getWatchedThreads(userId: string): Promise<WatchedThread[]> {
@@ -408,4 +543,23 @@ export async function markConversationAsRead(userId: string, otherUserId: string
     .eq("receiver_id", userId)
     .eq("sender_id", otherUserId)
     .is("read_at", null);
+}
+
+export async function getVerifiedAgentRecipients() {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name, city, firm")
+    .eq("role", "agent")
+    .eq("verification_status", "verified")
+    .order("full_name", { ascending: true });
+
+  return (data ?? []).map((agent) => ({
+    id: agent.id,
+    name: `${agent.full_name}${agent.city ? ` - ${agent.city}` : ""}${agent.firm ? ` (${agent.firm})` : ""}`,
+  }));
 }

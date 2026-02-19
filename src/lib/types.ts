@@ -91,3 +91,26 @@ export interface ConversationMessage {
   readAt: string | null;
   senderName: string;
 }
+
+export interface AgentGroup {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  municipality: string;
+  region: string;
+  status: "pending" | "approved" | "rejected";
+  memberCount: number;
+  isMember: boolean;
+}
+
+export interface PendingModerationItem {
+  id: string;
+  questionId: string | null;
+  questionTitle: string;
+  proposedBy: string;
+  proposedByName: string;
+  body: string;
+  blockedTerms: string[];
+  createdAt: string;
+}

@@ -2,18 +2,20 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { signOutAction } from "@/app/auth/actions";
 
-const nav = [
+const publicNav = [
   { href: "/fragor", label: "Frågor & svar" },
   { href: "/maklare", label: "Mäklare" },
-  { href: "/forum", label: "Mäklarforum" },
   { href: "/guider/kopare", label: "Köparguider" },
   { href: "/guider/saljare", label: "Säljarguider" },
   { href: "/ordlista", label: "Ordlista" },
-  { href: "/admin", label: "Admin" },
 ];
+
+const agentNav = [{ href: "/forum", label: "Mäklarforum" }];
+const adminNav = [{ href: "/admin", label: "Admin" }];
 
 export async function SiteHeader() {
   const user = await getCurrentUser();
+  const nav = [...publicNav, ...(user?.role === "agent" || user?.role === "admin" ? agentNav : []), ...(user?.role === "admin" ? adminNav : [])];
 
   return (
     <header className="sticky top-0 z-20 border-b border-white/40 bg-[rgba(243,241,236,0.92)] backdrop-blur">

@@ -62,3 +62,80 @@ export async function sendMessageAction(_: { error?: string; success?: string } 
   revalidatePath("/dashboard/maklare");
   return { success: "Meddelandet skickades." };
 }
+
+function toSlug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 80);
+}
+
+export async function createAgentGroupAction(_: { error?: string; success?: string } | undefined, formData: FormData) {
+  const user = await requireRole("agent", "/dashboard/maklare/grupper");
+
+  const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const municipality = String(formData.get("municipality") ?? "").trim();
+  const region = String(formData.get("region") ?? "").trim();
+
+  if (!name || !municipality || !region) {
+    return { error: "Namn, kommun och region är obligatoriskt." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const slug = `${toSlug(name)}-${Date.now().toString().slice(-5)}`;
+  const { data: group, error } = await supabase
+    .from("agent_groups")
+    .insert({
+      name,
+      slug,
+      description: description || null,
+      municipality,
+      region,
+      created_by: user.id,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (group) {
+    await supabase.from("agent_group_members").insert({
+      group_id: group.id,
+      agent_id: user.id,
+      role: "owner",
+    });
+  }
+
+  revalidatePath("/dashboard/maklare/grupper");
+  revalidatePath("/admin");
+
+  return { success: "Gruppen skapades och ligger nu för admin-godkännande." };
+}
+
+export async function joinAgentGroupAction(groupId: string) {
+  const user = await requireRole("agent", "/dashboard/maklare/grupper");
+  const supabase = await createSupabaseServerClient();
+
+  await supabase.from("agent_group_members").insert({
+    group_id: groupId,
+    agent_id: user.id,
+    role: "member",
+  });
+
+  revalidatePath("/dashboard/maklare/grupper");
+}
+
+export async function leaveAgentGroupAction(groupId: string) {
+  const user = await requireRole("agent", "/dashboard/maklare/grupper");
+  const supabase = await createSupabaseServerClient();
+
+  await supabase.from("agent_group_members").delete().eq("group_id", groupId).eq("agent_id", user.id);
+
+  revalidatePath("/dashboard/maklare/grupper");
+}

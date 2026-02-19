@@ -15,7 +15,7 @@ export function AnswerComposer({
     <section className="card">
       <h3 className="text-lg font-semibold">Svara på frågan (mäklare)</h3>
       <p className="mt-1 text-sm text-[var(--muted)]">
-        Ett svar per mäklare och fråga. Otillåtna ord blockeras automatiskt.
+        Ett svar per mäklare och fråga. Svar med blockerade ord skickas till admin för granskning före publicering.
       </p>
       <form action={formAction} className="mt-4">
         <textarea

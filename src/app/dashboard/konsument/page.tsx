@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { QuestionCreateForm } from "@/components/question-create-form";
 import { requireRole } from "@/lib/auth";
-import { getQuestions } from "@/lib/data";
+import { getMessageThreads, getQuestions } from "@/lib/data";
 
 export default async function ConsumerDashboardPage() {
   const user = await requireRole("consumer", "/dashboard/konsument");
-  const questions = await getQuestions();
+  const [questions, messageThreads] = await Promise.all([getQuestions(), getMessageThreads(user.id)]);
   const own = questions.filter((question) => question.askedBy === user.id);
 
   return (
@@ -26,6 +26,16 @@ export default async function ConsumerDashboardPage() {
           <p className="text-xs text-[var(--muted)]">Besvarade</p>
         </div>
       </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="metric">
+          <p className="text-2xl font-semibold">{messageThreads.length}</p>
+          <p className="text-xs text-[var(--muted)]">Konversationer med mäklare</p>
+        </div>
+        <div className="metric">
+          <p className="text-2xl font-semibold">{messageThreads.reduce((acc, thread) => acc + thread.unreadCount, 0)}</p>
+          <p className="text-xs text-[var(--muted)]">Olästa meddelanden</p>
+        </div>
+      </div>
 
       <QuestionCreateForm />
 
@@ -42,6 +52,14 @@ export default async function ConsumerDashboardPage() {
           </article>
         ))}
       </div>
+
+      <section className="mt-6 card">
+        <h2 className="text-xl">Direktmeddelanden</h2>
+        <p className="mt-2 text-sm text-[var(--muted)]">Skriv direkt till verifierade mäklare och följ upp svar i din inkorg.</p>
+        <Link href="/dashboard/konsument/messages" className="mt-3 inline-block text-sm text-[var(--accent)]">
+          Öppna meddelanden
+        </Link>
+      </section>
     </div>
   );
 }

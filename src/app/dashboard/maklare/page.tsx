@@ -3,7 +3,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AgentProfileForm } from "@/components/agent-profile-form";
 import { MessageComposeForm } from "@/components/message-compose-form";
 import { formatDate } from "@/lib/format";
-import { getAgentProfile, getMessageThreads, getPotentialMessageRecipientsFromWatched, getWatchedThreads } from "@/lib/data";
+import { getAgentLeadMetrics, getAgentProfile, getMessageThreads, getPotentialMessageRecipientsFromWatched, getWatchedThreads } from "@/lib/data";
+import { sendMessageAction } from "@/app/dashboard/maklare/actions";
 import Link from "next/link";
 
 const verificationLabels: Record<string, string> = {
@@ -24,7 +25,7 @@ export default async function AgentDashboardPage() {
   const user = await requireRole("agent", "/dashboard/maklare");
   const supabase = await createSupabaseServerClient();
 
-  const [{ count: answerCount }, { count: profileViews }, { data: profile }, watchedThreads, messageThreads, watchedRecipients, agentProfile] = await Promise.all([
+  const [{ count: answerCount }, { count: profileViews }, { data: profile }, watchedThreads, messageThreads, watchedRecipients, agentProfile, leadMetrics] = await Promise.all([
     supabase.from("answers").select("id", { count: "exact", head: true }).eq("answered_by", user.id),
     supabase.from("questions").select("id", { count: "exact", head: true }),
     supabase.from("profiles").select("verification_status, subscription_status, city, firm").eq("id", user.id).single(),
@@ -32,6 +33,7 @@ export default async function AgentDashboardPage() {
     getMessageThreads(user.id),
     getPotentialMessageRecipientsFromWatched(user.id),
     getAgentProfile(user.id),
+    getAgentLeadMetrics(user.id),
   ]);
   const recipientsMap = new Map<string, { id: string; name: string }>();
   for (const thread of messageThreads) {
@@ -63,6 +65,16 @@ export default async function AgentDashboardPage() {
         <div className="metric">
           <p className="text-2xl font-semibold">{planLabels[profile?.subscription_status ?? "none"] ?? "Ingen"}</p>
           <p className="text-xs text-[var(--muted)]">Planstatus</p>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="metric">
+          <p className="text-2xl font-semibold">{leadMetrics.sentTotal}</p>
+          <p className="text-xs text-[var(--muted)]">Automatiska tips/leads skickade totalt</p>
+        </div>
+        <div className="metric">
+          <p className="text-2xl font-semibold">{leadMetrics.sentLast30Days}</p>
+          <p className="text-xs text-[var(--muted)]">Skickade senaste 30 dagar</p>
         </div>
       </div>
 
@@ -126,9 +138,19 @@ export default async function AgentDashboardPage() {
 
           <div className="mt-5 border-t border-[var(--line)] pt-4">
             <h3 className="mb-2 text-sm font-semibold">Skicka nytt meddelande</h3>
-            <MessageComposeForm recipients={recipients} />
+            <MessageComposeForm recipients={recipients} action={sendMessageAction} />
           </div>
         </article>
+      </section>
+
+      <section className="mt-6 card">
+        <h2 className="text-xl">Mäklargrupper</h2>
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          Skapa eller gå med i lokala grupper för kunskapsutbyte, till exempel Mäklare i Täby eller andra nischgrupper.
+        </p>
+        <Link href="/dashboard/maklare/grupper" className="mt-4 inline-flex text-sm text-[var(--accent)]">
+          Öppna grupper
+        </Link>
       </section>
     </div>
   );

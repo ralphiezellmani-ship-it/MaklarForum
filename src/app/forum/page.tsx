@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import Link from "next/link";
 
 const posts = [
   {
@@ -50,6 +51,15 @@ export default async function ForumPage() {
             <p className="mt-2 text-sm text-[var(--muted)]">{post.body}</p>
           </article>
         ))}
+      </div>
+      <div className="mt-6 card">
+        <h2 className="text-2xl">Mäklargrupper</h2>
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          Skapa lokala och nischade grupper, till exempel Mäklare i Täby eller Gravida mäklare.
+        </p>
+        <Link href="/dashboard/maklare/grupper" className="mt-3 inline-block text-sm text-[var(--accent)]">
+          Hantera grupper
+        </Link>
       </div>
     </div>
   );

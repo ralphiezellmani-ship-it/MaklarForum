@@ -1,12 +1,27 @@
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getAdminMetrics, getPendingAgentVerifications } from "@/lib/data";
-import { approveAgentAction, deleteUserAction, rejectAgentAction, updateAgentEmailAction } from "@/app/admin/actions";
+import { getAdminMetrics, getPendingAgentVerifications, getPendingGroupApprovals, getPendingModerationItems } from "@/lib/data";
+import {
+  approveAgentAction,
+  approveGroupAction,
+  approveModerationItemAction,
+  deleteUserAction,
+  rejectAgentAction,
+  rejectGroupAction,
+  rejectModerationItemAction,
+  updateAgentEmailAction,
+} from "@/app/admin/actions";
+import { formatDate } from "@/lib/format";
 
 export default async function AdminPage() {
   await requireRole("admin", "/admin");
 
-  const [metrics, pendingAgents] = await Promise.all([getAdminMetrics(), getPendingAgentVerifications()]);
+  const [metrics, pendingAgents, pendingGroups, pendingModeration] = await Promise.all([
+    getAdminMetrics(),
+    getPendingAgentVerifications(),
+    getPendingGroupApprovals(),
+    getPendingModerationItems(),
+  ]);
   const supabase = await createSupabaseServerClient();
   const { data: users } = await supabase
     .from("profiles")
@@ -82,6 +97,61 @@ export default async function AdminPage() {
             </label>
             <button className="pill pill-dark w-fit">Uppdatera e-post</button>
           </form>
+        </div>
+      </section>
+
+      <section className="mt-6 grid gap-6 lg:grid-cols-2">
+        <div className="card">
+          <h2 className="text-2xl">Gruppgodkännanden</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">Nya mäklargrupper måste godkännas innan de blir synliga för andra.</p>
+          <div className="mt-4 space-y-3">
+            {pendingGroups.length === 0 ? <p className="text-sm text-[var(--muted)]">Inga väntande gruppförslag.</p> : null}
+            {pendingGroups.map((group) => (
+              <div key={group.id} className="rounded-xl border border-[var(--line)] bg-white p-3 text-sm">
+                <p className="font-semibold">{group.name}</p>
+                <p className="text-[var(--muted)]">{group.municipality} | {group.region}</p>
+                <p className="text-[var(--muted)]">
+                  Skapad av {group.createdBy} • {formatDate(group.createdAt)}
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <form action={approveGroupAction}>
+                    <input type="hidden" name="group_id" value={group.id} />
+                    <button className="pill pill-dark">Godkänn</button>
+                  </form>
+                  <form action={rejectGroupAction}>
+                    <input type="hidden" name="group_id" value={group.id} />
+                    <button className="pill pill-light">Neka</button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <h2 className="text-2xl">Publiceringskö</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">Blockerade svar som väntar på adminbeslut innan publicering.</p>
+          <div className="mt-4 space-y-3">
+            {pendingModeration.length === 0 ? <p className="text-sm text-[var(--muted)]">Inga väntande publiceringar.</p> : null}
+            {pendingModeration.map((item) => (
+              <div key={item.id} className="rounded-xl border border-[var(--line)] bg-white p-3 text-sm">
+                <p className="font-semibold">{item.questionTitle}</p>
+                <p className="text-[var(--muted)]">Föreslaget av: {item.proposedByName}</p>
+                <p className="text-[var(--muted)]">Blockerade ord: {item.blockedTerms.join(", ")}</p>
+                <p className="mt-2 rounded-lg border border-[var(--line)] bg-[var(--paper)] p-2">{item.body}</p>
+                <div className="mt-2 flex gap-2">
+                  <form action={approveModerationItemAction}>
+                    <input type="hidden" name="queue_id" value={item.id} />
+                    <button className="pill pill-dark">Godkänn & publicera</button>
+                  </form>
+                  <form action={rejectModerationItemAction}>
+                    <input type="hidden" name="queue_id" value={item.id} />
+                    <button className="pill pill-light">Neka</button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
