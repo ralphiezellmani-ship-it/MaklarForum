@@ -54,9 +54,14 @@ export async function SiteHeader() {
               </form>
             </>
           ) : (
-            <Link href="/login" className="pill pill-dark">
-              Logga in
-            </Link>
+            <>
+              <Link href="/login/maklare" className="pill pill-light">
+                För mäklare
+              </Link>
+              <Link href="/login" className="pill pill-dark">
+                Logga in
+              </Link>
+            </>
           )}
         </div>
       </div>

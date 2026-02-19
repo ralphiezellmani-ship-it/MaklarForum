@@ -47,6 +47,7 @@ Om en anvandare redan skapats i `auth.users` men saknar rad i `profiles`:
 
 ## Viktiga routes
 - `/login`
+- `/login/maklare`
 - `/register/consumer`
 - `/register/maklare`
 - `/fragor` och `/fragor/[slug]`

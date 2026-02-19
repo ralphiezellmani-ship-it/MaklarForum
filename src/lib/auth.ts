@@ -110,7 +110,9 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 export async function requireUser(nextPath = "/") {
   const user = await getCurrentUser();
   if (!user) {
-    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
+    const shouldUseAgentLogin = nextPath.startsWith("/dashboard/maklare") || nextPath.startsWith("/forum");
+    const loginPath = shouldUseAgentLogin ? "/login/maklare" : "/login";
+    redirect(`${loginPath}?next=${encodeURIComponent(nextPath)}`);
   }
   return user;
 }

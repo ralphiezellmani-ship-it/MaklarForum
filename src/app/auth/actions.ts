@@ -16,6 +16,7 @@ export async function loginAction(_: { error?: string } | undefined, formData: F
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "").trim();
   const next = String(formData.get("next") ?? "/");
+  const portal = String(formData.get("portal") ?? "consumer");
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -43,6 +44,11 @@ export async function loginAction(_: { error?: string } | undefined, formData: F
         redirect("/admin");
       }
     }
+
+    if (portal === "agent") {
+      redirect("/dashboard/maklare/profil");
+    }
+    redirect("/dashboard/konsument");
   }
 
   redirect(next);
