@@ -64,3 +64,20 @@ export interface GlossaryTerm {
   definition: string;
   whyItMatters: string;
 }
+
+export interface WatchedThread {
+  questionId: string;
+  questionSlug: string;
+  title: string;
+  createdAt: string;
+  answerCount: number;
+}
+
+export interface MessageThread {
+  otherUserId: string;
+  otherUserName: string;
+  otherUserRole: UserRole;
+  lastMessage: string;
+  lastMessageAt: string;
+  unreadCount: number;
+}

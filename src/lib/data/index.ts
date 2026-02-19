@@ -1,6 +1,7 @@
 import { agents as mockAgents, answers as mockAnswers, questions as mockQuestions } from "@/lib/mock-data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
+import { MessageThread, WatchedThread } from "@/lib/types";
 
 export async function getQuestions() {
   if (!hasSupabaseEnv()) {
@@ -221,4 +222,146 @@ export async function getAdminMetrics() {
     payingAgents: payingAgents ?? 0,
     flaggedItems: flaggedItems ?? 0,
   };
+}
+
+export async function getAgentProfile(userId: string) {
+  if (!hasSupabaseEnv()) {
+    return mockAgents[0];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name, profile_slug, firm, title, city, bio, fmi_number, verification_status, subscription_status")
+    .eq("id", userId)
+    .single();
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: data.id,
+    fullName: data.full_name,
+    slug: data.profile_slug,
+    firm: data.firm,
+    title: data.title,
+    city: data.city,
+    municipalities: [],
+    bio: data.bio ?? "",
+    fmiNumber: data.fmi_number ?? "",
+    verificationStatus: data.verification_status,
+    premium: data.subscription_status === "active",
+    soldCount: 0,
+    activeCount: 0,
+    profileViews: 0,
+  };
+}
+
+export async function getWatchedThreads(userId: string): Promise<WatchedThread[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: watcherRows } = await supabase
+    .from("question_watchers")
+    .select("question_id, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (!watcherRows || watcherRows.length === 0) {
+    return [];
+  }
+
+  const questionIds = watcherRows.map((row) => row.question_id);
+  const { data: questionRows } = await supabase
+    .from("questions")
+    .select("id, question_slug, title, created_at")
+    .in("id", questionIds);
+  const { data: answerRows } = await supabase.from("answers").select("question_id").in("question_id", questionIds);
+
+  const questionMap = new Map((questionRows ?? []).map((row) => [row.id, row]));
+
+  return watcherRows
+    .map((watch) => {
+      const question = questionMap.get(watch.question_id);
+      if (!question) return null;
+
+      return {
+        questionId: question.id,
+        questionSlug: question.question_slug,
+        title: question.title,
+        createdAt: question.created_at,
+        answerCount: answerRows?.filter((answer) => answer.question_id === question.id).length ?? 0,
+      };
+    })
+    .filter((row): row is WatchedThread => Boolean(row));
+}
+
+export async function getMessageThreads(userId: string): Promise<MessageThread[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: rows } = await supabase
+    .from("messages")
+    .select("id, sender_id, receiver_id, body, read_at, created_at")
+    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+    .order("created_at", { ascending: false });
+
+  if (!rows || rows.length === 0) {
+    return [];
+  }
+
+  const grouped = new Map<string, typeof rows>();
+
+  for (const row of rows) {
+    const otherUserId = row.sender_id === userId ? row.receiver_id : row.sender_id;
+    const bucket = grouped.get(otherUserId) ?? [];
+    bucket.push(row);
+    grouped.set(otherUserId, bucket);
+  }
+
+  const otherIds = [...grouped.keys()];
+  const { data: profiles } = await supabase.from("profiles").select("id, full_name, role").in("id", otherIds);
+  const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+
+  return [...grouped.entries()].map(([otherUserId, messages]) => {
+    const latest = messages[0];
+    const unreadCount = messages.filter((message) => message.receiver_id === userId && message.read_at === null).length;
+    const other = profileMap.get(otherUserId);
+
+    return {
+      otherUserId,
+      otherUserName: other?.full_name ?? "Användare",
+      otherUserRole: (other?.role ?? "consumer") as "consumer" | "agent" | "admin",
+      lastMessage: latest.body,
+      lastMessageAt: latest.created_at,
+      unreadCount,
+    };
+  });
+}
+
+export async function getPotentialMessageRecipientsFromWatched(userId: string): Promise<Array<{ id: string; name: string }>> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: watched } = await supabase.from("question_watchers").select("question_id").eq("user_id", userId);
+  const questionIds = watched?.map((row) => row.question_id) ?? [];
+  if (questionIds.length === 0) {
+    return [];
+  }
+
+  const { data: questions } = await supabase.from("questions").select("asked_by").in("id", questionIds);
+  const userIds = [...new Set((questions ?? []).map((row) => row.asked_by).filter((id) => id !== userId))];
+  if (userIds.length === 0) {
+    return [];
+  }
+
+  const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", userIds);
+  return (profiles ?? []).map((profile) => ({ id: profile.id, name: profile.full_name }));
 }

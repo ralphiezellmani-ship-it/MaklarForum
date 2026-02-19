@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireUser } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { canPublish } from "@/lib/moderation";
 
@@ -91,4 +91,22 @@ export async function askQuestionAction(_: AskState | undefined, formData: FormD
   revalidatePath("/dashboard/konsument");
 
   return { success: "Frågan är publicerad." };
+}
+
+export async function toggleWatchThreadAction(questionId: string, slug: string, watching: boolean) {
+  const user = await requireUser(`/fragor/${slug}`);
+  const supabase = await createSupabaseServerClient();
+
+  if (watching) {
+    await supabase.from("question_watchers").delete().eq("question_id", questionId).eq("user_id", user.id);
+  } else {
+    await supabase.from("question_watchers").insert({
+      question_id: questionId,
+      user_id: user.id,
+    });
+  }
+
+  revalidatePath(`/fragor/${slug}`);
+  revalidatePath("/dashboard/konsument");
+  revalidatePath("/dashboard/maklare");
 }
