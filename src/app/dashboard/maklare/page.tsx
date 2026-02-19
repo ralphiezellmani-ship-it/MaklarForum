@@ -4,6 +4,7 @@ import { AgentProfileForm } from "@/components/agent-profile-form";
 import { MessageComposeForm } from "@/components/message-compose-form";
 import { formatDate } from "@/lib/format";
 import { getAgentProfile, getMessageThreads, getPotentialMessageRecipientsFromWatched, getWatchedThreads } from "@/lib/data";
+import Link from "next/link";
 
 const verificationLabels: Record<string, string> = {
   pending: "Väntar",
@@ -99,18 +100,27 @@ export default async function AgentDashboardPage() {
         </article>
 
         <article className="card">
-          <h2 className="text-xl">Meddelanden</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl">Meddelanden</h2>
+            <Link href="/dashboard/maklare/messages" className="text-sm text-[var(--accent)]">
+              Öppna inkorg
+            </Link>
+          </div>
           <p className="mt-2 text-sm text-[var(--muted)]">Snabböversikt över senaste konversationer.</p>
           <div className="mt-4 space-y-3">
             {messageThreads.length === 0 ? <p className="text-sm text-[var(--muted)]">Inga meddelanden ännu.</p> : null}
             {messageThreads.map((thread) => (
-              <div key={thread.otherUserId} className="rounded-xl border border-[var(--line)] bg-white p-3">
+              <Link
+                key={thread.otherUserId}
+                href={`/dashboard/maklare/messages/${thread.otherUserId}`}
+                className="block rounded-xl border border-[var(--line)] bg-white p-3"
+              >
                 <p className="font-medium">{thread.otherUserName} ({thread.otherUserRole})</p>
                 <p className="mt-1 text-sm text-[var(--muted)]">{thread.lastMessage}</p>
                 <p className="mt-1 text-xs text-[var(--muted)]">
                   {formatDate(thread.lastMessageAt)} • Olästa: {thread.unreadCount}
                 </p>
-              </div>
+              </Link>
             ))}
           </div>
 

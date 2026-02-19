@@ -36,6 +36,7 @@ Kor migrationerna i ordning:
 - `supabase/migrations/20260218_billing.sql`
 - `supabase/migrations/20260219_profiles_insert_policy.sql`
 - `supabase/migrations/20260219_engagement_policies.sql`
+- `supabase/migrations/20260219_messages_update_policy.sql`
 
 Promotera ditt konto till admin efter forsta inloggningen:
 - Kor `supabase/sql/promote_admin.sql` och byt e-post till din riktiga adress.

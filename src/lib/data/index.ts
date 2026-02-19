@@ -1,7 +1,7 @@
 import { agents as mockAgents, answers as mockAnswers, questions as mockQuestions } from "@/lib/mock-data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import { MessageThread, WatchedThread } from "@/lib/types";
+import { ConversationMessage, MessageThread, WatchedThread } from "@/lib/types";
 
 export async function getQuestions() {
   if (!hasSupabaseEnv()) {
@@ -364,4 +364,48 @@ export async function getPotentialMessageRecipientsFromWatched(userId: string): 
 
   const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", userIds);
   return (profiles ?? []).map((profile) => ({ id: profile.id, name: profile.full_name }));
+}
+
+export async function getConversation(userId: string, otherUserId: string): Promise<ConversationMessage[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: rows } = await supabase
+    .from("messages")
+    .select("id, sender_id, receiver_id, body, created_at, read_at")
+    .or(`and(sender_id.eq.${userId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${userId})`)
+    .order("created_at", { ascending: true });
+
+  if (!rows || rows.length === 0) {
+    return [];
+  }
+
+  const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", [userId, otherUserId]);
+  const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile.full_name]));
+
+  return rows.map((row) => ({
+    id: row.id,
+    senderId: row.sender_id,
+    receiverId: row.receiver_id,
+    body: row.body,
+    createdAt: row.created_at,
+    readAt: row.read_at,
+    senderName: profileMap.get(row.sender_id) ?? "Användare",
+  }));
+}
+
+export async function markConversationAsRead(userId: string, otherUserId: string) {
+  if (!hasSupabaseEnv()) {
+    return;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  await supabase
+    .from("messages")
+    .update({ read_at: new Date().toISOString() })
+    .eq("receiver_id", userId)
+    .eq("sender_id", otherUserId)
+    .is("read_at", null);
 }

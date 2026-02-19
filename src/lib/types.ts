@@ -81,3 +81,13 @@ export interface MessageThread {
   lastMessageAt: string;
   unreadCount: number;
 }
+
+export interface ConversationMessage {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+  senderName: string;
+}
