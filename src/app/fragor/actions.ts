@@ -83,8 +83,8 @@ export async function askQuestionAction(_: AskState | undefined, formData: FormD
     .replace(/\s+/g, "-")
     .slice(0, 80);
 
-  const supabase = await createSupabaseServerClient();
-  const { data: insertedQuestion, error } = await supabase
+  const admin = createSupabaseAdminClient();
+  const { data: insertedQuestion, error } = await admin
     .from("questions")
     .insert({
       asked_by: user.id,
@@ -101,11 +101,10 @@ export async function askQuestionAction(_: AskState | undefined, formData: FormD
     .single();
 
   if (error) {
-    return { error: error.message };
+    return { error: `Kunde inte publicera frågan: ${error.message}` };
   }
 
   if (insertedQuestion) {
-    const admin = createSupabaseAdminClient();
     const { data: verifiedAgents } = await admin
       .from("profiles")
       .select("id, city")
