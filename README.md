@@ -34,9 +34,13 @@ Kopiera `.env.example` till `.env.local` och fyll i:
 Kor migrationerna i ordning:
 - `supabase/migrations/20260218_init.sql`
 - `supabase/migrations/20260218_billing.sql`
+- `supabase/migrations/20260219_profiles_insert_policy.sql`
 
 Promotera ditt konto till admin efter forsta inloggningen:
 - Kor `supabase/sql/promote_admin.sql` och byt e-post till din riktiga adress.
+
+Om en anvandare redan skapats i `auth.users` men saknar rad i `profiles`:
+- Kor `supabase/sql/fix_profile_for_existing_user.sql` och byt e-post i filen.
 
 ## Viktiga routes
 - `/login`
