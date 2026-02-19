@@ -23,6 +23,7 @@ export function AnswerComposer({
           className="min-h-36 w-full rounded-xl border border-[var(--line)] bg-white p-3 text-sm"
           placeholder="Skriv ett tydligt och hjälpsamt svar till konsumenten..."
           required
+          maxLength={10000}
         />
         {state?.error ? <p className="mt-2 text-sm text-red-700">{state.error}</p> : null}
         {state?.success ? <p className="mt-2 text-sm text-emerald-700">{state.success}</p> : null}

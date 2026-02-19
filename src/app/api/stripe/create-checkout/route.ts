@@ -28,28 +28,33 @@ export async function POST() {
     return NextResponse.json({ error: "Only agents can purchase premium" }, { status: 403 });
   }
 
-  const stripe = new Stripe(stripeKey);
+  try {
+    const stripe = new Stripe(stripeKey);
 
-  let customerId = profile.stripe_customer_id;
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: profile.email,
-      metadata: { profile_id: profile.id },
+    let customerId = profile.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: profile.email,
+        metadata: { profile_id: profile.id },
+      });
+      customerId = customer.id;
+      await supabase.from("profiles").update({ stripe_customer_id: customerId }).eq("id", profile.id);
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${siteUrl}/dashboard/maklare?billing=success`,
+      cancel_url: `${siteUrl}/priser?billing=cancelled`,
+      metadata: {
+        profile_id: profile.id,
+      },
     });
-    customerId = customer.id;
-    await supabase.from("profiles").update({ stripe_customer_id: customerId }).eq("id", profile.id);
+
+    return NextResponse.json({ url: session.url });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Stripe checkout failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: "subscription",
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${siteUrl}/dashboard/maklare?billing=success`,
-    cancel_url: `${siteUrl}/priser?billing=cancelled`,
-    metadata: {
-      profile_id: profile.id,
-    },
-  });
-
-  return NextResponse.json({ url: session.url });
 }

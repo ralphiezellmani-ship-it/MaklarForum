@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
+import { toSlug } from "@/lib/format";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function updateAgentProfileAction(_: { error?: string; success?: string } | undefined, formData: FormData) {
@@ -42,7 +43,7 @@ export async function updateAgentProfileAction(_: { error?: string; success?: st
 export async function sendMessageAction(_: { error?: string; success?: string } | undefined, formData: FormData) {
   const user = await requireRole("agent", "/dashboard/maklare");
   const receiverId = String(formData.get("receiver_id") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim().slice(0, 5000);
 
   if (!receiverId || !body) {
     return { error: "Mottagare och meddelande krävs." };
@@ -86,15 +87,6 @@ export async function sendMessageAction(_: { error?: string; success?: string } 
 
   revalidatePath("/dashboard/maklare");
   return { success: "Meddelandet skickades." };
-}
-
-function toSlug(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .slice(0, 80);
 }
 
 export async function createAgentGroupAction(_: { error?: string; success?: string } | undefined, formData: FormData) {

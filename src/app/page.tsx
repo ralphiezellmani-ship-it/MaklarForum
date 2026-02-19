@@ -26,9 +26,6 @@ export default async function Home() {
           <Link href="/maklare" className="pill pill-light">
             Se verifierade mäklare
           </Link>
-          <Link href="/admin" className="pill pill-light">
-            Gå till admin
-          </Link>
         </div>
       </section>
 

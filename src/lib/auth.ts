@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
+import { toSlug } from "@/lib/format";
 import { UserRole } from "@/lib/types";
 
 export interface AuthUser {
@@ -15,16 +16,6 @@ function normalizeRole(input: unknown): UserRole {
     return input;
   }
   return "consumer";
-}
-
-function toProfileSlug(name: string, city: string) {
-  const base = `${name}-${city}`.trim();
-  return base
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .slice(0, 80);
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
@@ -77,7 +68,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     if (role === "agent") {
       insertPayload.verification_status = "pending";
       if (fullName && city) {
-        insertPayload.profile_slug = toProfileSlug(fullName, city);
+        insertPayload.profile_slug = toSlug(`${fullName}-${city}`);
       }
     }
 

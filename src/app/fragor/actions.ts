@@ -2,8 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole, requireUser } from "@/lib/auth";
+import { toSlug } from "@/lib/format";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { canPublish } from "@/lib/moderation";
+
+const MAX_BODY_LENGTH = 10000;
+const MAX_TITLE_LENGTH = 200;
 
 type AnswerState = { error?: string; success?: string };
 
@@ -15,7 +19,7 @@ export async function submitAnswerAction(questionId: string, slug: string, _: An
   const user = await requireRole("agent", `/fragor/${slug}`);
   const supabase = await createSupabaseServerClient();
 
-  const body = String(formData.get("body") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim().slice(0, MAX_BODY_LENGTH);
   if (!body) {
     return { error: "Svar kan inte vara tomt." };
   }
@@ -64,8 +68,8 @@ export async function submitAnswerAction(questionId: string, slug: string, _: An
 export async function askQuestionAction(_: AskState | undefined, formData: FormData) {
   const user = await requireRole("consumer", "/dashboard/konsument");
 
-  const title = String(formData.get("title") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim().slice(0, MAX_TITLE_LENGTH);
+  const body = String(formData.get("body") ?? "").trim().slice(0, MAX_BODY_LENGTH);
   const audience = String(formData.get("audience") ?? "general");
   const category = String(formData.get("category") ?? "ovrigt");
   const geoScope = String(formData.get("geo_scope") ?? "open");
@@ -76,12 +80,7 @@ export async function askQuestionAction(_: AskState | undefined, formData: FormD
     return { error: "Rubrik och fråga är obligatoriska." };
   }
 
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .slice(0, 80);
+  const slug = toSlug(title);
 
   const supabase = await createSupabaseServerClient();
   const { data: insertedQuestion, error } = await supabase
@@ -106,24 +105,18 @@ export async function askQuestionAction(_: AskState | undefined, formData: FormD
 
   if (insertedQuestion) {
     const admin = createSupabaseAdminClient();
-    const { data: verifiedAgents } = await admin
-      .from("profiles")
-      .select("id, city")
-      .eq("role", "agent")
-      .eq("verification_status", "verified");
-    const verifiedSet = new Set((verifiedAgents ?? []).map((agent) => agent.id));
 
-    let recipientIds = (verifiedAgents ?? []).map((agent) => agent.id);
+    let recipientIds: string[] = [];
 
     if ((insertedQuestion.geo_scope === "local" || insertedQuestion.geo_scope === "regional") && (insertedQuestion.municipality || insertedQuestion.region)) {
+      const localMunicipality = (insertedQuestion.municipality ?? "").toLowerCase();
+      const localRegion = (insertedQuestion.region ?? "").toLowerCase();
+
       const { data: areaMatches } = await admin
         .from("agent_areas")
         .select("agent_id, municipality, region");
 
-      const localMunicipality = (insertedQuestion.municipality ?? "").toLowerCase();
-      const localRegion = (insertedQuestion.region ?? "").toLowerCase();
-
-      recipientIds = (areaMatches ?? [])
+      const matchedAgentIds = (areaMatches ?? [])
         .filter((area) => {
           if (insertedQuestion.geo_scope === "local") {
             return (area.municipality ?? "").toLowerCase() === localMunicipality;
@@ -131,9 +124,27 @@ export async function askQuestionAction(_: AskState | undefined, formData: FormD
           return (area.region ?? "").toLowerCase() === localRegion;
         })
         .map((area) => area.agent_id);
+
+      if (matchedAgentIds.length > 0) {
+        const { data: verifiedMatched } = await admin
+          .from("profiles")
+          .select("id")
+          .eq("role", "agent")
+          .eq("verification_status", "verified")
+          .in("id", matchedAgentIds);
+        recipientIds = (verifiedMatched ?? []).map((a) => a.id);
+      }
+    } else {
+      const { data: verifiedAgents } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("role", "agent")
+        .eq("verification_status", "verified")
+        .limit(100);
+      recipientIds = (verifiedAgents ?? []).map((a) => a.id);
     }
 
-    recipientIds = [...new Set(recipientIds)].filter((id) => verifiedSet.has(id));
+    recipientIds = [...new Set(recipientIds)];
 
     if (recipientIds.length > 0) {
       await admin.from("lead_dispatch_logs").insert(
@@ -214,8 +225,8 @@ export async function voteAnswerAction(_: VoteState | undefined, formData: FormD
 export async function createAgentTipAction(_: TipState | undefined, formData: FormData) {
   const user = await requireRole("agent", "/dashboard/maklare/fragor");
 
-  const title = String(formData.get("title") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim().slice(0, MAX_TITLE_LENGTH);
+  const body = String(formData.get("body") ?? "").trim().slice(0, MAX_BODY_LENGTH);
   const audience = String(formData.get("audience") ?? "general");
   const geoScope = String(formData.get("geo_scope") ?? "open");
   const municipality = String(formData.get("municipality") ?? "").trim();

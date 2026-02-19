@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export async function sendConsumerMessageAction(_: { error?: string; success?: string } | undefined, formData: FormData) {
   const user = await requireRole("consumer", "/dashboard/konsument/messages");
   const receiverId = String(formData.get("receiver_id") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim().slice(0, 5000);
 
   if (!receiverId || !body) {
     return { error: "Mottagare och meddelande krävs." };
@@ -47,7 +47,7 @@ export async function sendConsumerConversationMessageAction(
   formData: FormData,
 ) {
   const user = await requireRole("consumer", `/dashboard/konsument/messages/${otherUserId}`);
-  const body = String(formData.get("body") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim().slice(0, 5000);
 
   if (!body) {
     return { error: "Skriv ett meddelande innan du skickar." };

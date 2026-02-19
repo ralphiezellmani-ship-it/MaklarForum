@@ -48,8 +48,28 @@ export async function updateAgentEmailAction(formData: FormData) {
 export async function deleteUserAction(formData: FormData) {
   await requireRole("admin", "/admin");
   const userId = String(formData.get("user_id") ?? "");
+  const confirmDelete = String(formData.get("confirm_delete") ?? "");
+
+  if (confirmDelete !== "RADERA") {
+    return;
+  }
 
   const admin = createSupabaseAdminClient();
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id, role, full_name, email")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!profile) {
+    return;
+  }
+
+  if (profile.role === "admin") {
+    return;
+  }
+
   await admin.auth.admin.deleteUser(userId);
 
   revalidatePath("/admin");
@@ -100,13 +120,13 @@ export async function approveModerationItemAction(formData: FormData) {
   const admin = createSupabaseAdminClient();
   const now = new Date().toISOString();
 
-  const { data: queued } = await admin
+  const { data: queued, error: fetchError } = await admin
     .from("moderation_queue")
     .select("id, question_id, proposed_by, body, status")
     .eq("id", queueId)
     .single();
 
-  if (!queued || queued.status !== "pending") {
+  if (fetchError || !queued || queued.status !== "pending") {
     return;
   }
 
@@ -114,7 +134,26 @@ export async function approveModerationItemAction(formData: FormData) {
     return;
   }
 
-  await admin.from("answers").upsert(
+  const { data: question } = await admin
+    .from("questions")
+    .select("id")
+    .eq("id", queued.question_id)
+    .maybeSingle();
+
+  if (!question) {
+    await admin
+      .from("moderation_queue")
+      .update({
+        status: "rejected",
+        reviewed_by: adminUser.id,
+        reviewed_at: now,
+      })
+      .eq("id", queueId);
+    revalidatePath("/admin");
+    return;
+  }
+
+  const { error: upsertError } = await admin.from("answers").upsert(
     {
       question_id: queued.question_id,
       answered_by: queued.proposed_by,
@@ -123,6 +162,10 @@ export async function approveModerationItemAction(formData: FormData) {
     },
     { onConflict: "question_id,answered_by" },
   );
+
+  if (upsertError) {
+    return;
+  }
 
   await admin
     .from("moderation_queue")

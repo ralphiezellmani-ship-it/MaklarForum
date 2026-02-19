@@ -10,11 +10,11 @@ export function AgentTipForm() {
     <form action={action} className="grid gap-3 text-sm">
       <label>
         Rubrik
-        <input name="title" required className="mt-1 w-full rounded-xl border border-[var(--line)] p-2" placeholder="Ex: 3 saker köpare missar i budgivning" />
+        <input name="title" required maxLength={200} className="mt-1 w-full rounded-xl border border-[var(--line)] p-2" placeholder="Ex: 3 saker köpare missar i budgivning" />
       </label>
       <label>
         Tips
-        <textarea name="body" required className="mt-1 min-h-24 w-full rounded-xl border border-[var(--line)] p-2" />
+        <textarea name="body" required maxLength={10000} className="mt-1 min-h-24 w-full rounded-xl border border-[var(--line)] p-2" />
       </label>
       <div className="grid gap-3 md:grid-cols-3">
         <label>

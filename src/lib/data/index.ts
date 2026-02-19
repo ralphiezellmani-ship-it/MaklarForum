@@ -18,32 +18,69 @@ export async function getQuestions() {
     return mockQuestions;
   }
 
-  const answerCounts = await supabase.from("answers").select("question_id");
+  const questionIds = data.map((q) => q.id);
+  const { data: answerCounts } = questionIds.length > 0
+    ? await supabase.from("answers").select("question_id").in("question_id", questionIds)
+    : { data: [] as Array<{ question_id: string }> };
 
-  return data.map((q) => {
-    const count = answerCounts.data?.filter((a) => a.question_id === q.id).length ?? 0;
+  const countMap = new Map<string, number>();
+  for (const row of answerCounts ?? []) {
+    countMap.set(row.question_id, (countMap.get(row.question_id) ?? 0) + 1);
+  }
 
-    return {
-      id: q.id,
-      slug: q.question_slug,
-      title: q.title,
-      body: q.body,
-      askedBy: q.asked_by,
-      audience: q.audience,
-      category: q.category,
-      geoScope: q.geo_scope,
-      municipality: q.municipality ?? undefined,
-      region: q.region ?? undefined,
-      createdAt: q.created_at,
-      helpfulVotes: 0,
-      answerCount: count,
-    };
-  });
+  return data.map((q) => ({
+    id: q.id,
+    slug: q.question_slug,
+    title: q.title,
+    body: q.body,
+    askedBy: q.asked_by,
+    audience: q.audience,
+    category: q.category,
+    geoScope: q.geo_scope,
+    municipality: q.municipality ?? undefined,
+    region: q.region ?? undefined,
+    createdAt: q.created_at,
+    helpfulVotes: 0,
+    answerCount: countMap.get(q.id) ?? 0,
+  }));
 }
 
 export async function getQuestionBySlug(slug: string) {
-  const questions = await getQuestions();
-  return questions.find((q) => q.slug === slug) ?? null;
+  if (!hasSupabaseEnv()) {
+    return mockQuestions.find((q) => q.slug === slug) ?? null;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: q } = await supabase
+    .from("questions")
+    .select("id, question_slug, title, body, asked_by, audience, category, geo_scope, municipality, region, created_at")
+    .eq("question_slug", slug)
+    .maybeSingle();
+
+  if (!q) {
+    return null;
+  }
+
+  const { count } = await supabase
+    .from("answers")
+    .select("id", { count: "exact", head: true })
+    .eq("question_id", q.id);
+
+  return {
+    id: q.id,
+    slug: q.question_slug,
+    title: q.title,
+    body: q.body,
+    askedBy: q.asked_by,
+    audience: q.audience,
+    category: q.category,
+    geoScope: q.geo_scope,
+    municipality: q.municipality ?? undefined,
+    region: q.region ?? undefined,
+    createdAt: q.created_at,
+    helpfulVotes: 0,
+    answerCount: count ?? 0,
+  };
 }
 
 export async function getAnswersForQuestion(questionId: string, viewerId?: string) {
@@ -173,8 +210,38 @@ export async function getAgents() {
 }
 
 export async function getAgentBySlug(slug: string) {
-  const agents = await getAgents();
-  return agents.find((agent) => agent.slug === slug) ?? null;
+  if (!hasSupabaseEnv()) {
+    return mockAgents.find((agent) => agent.slug === slug) ?? null;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: row } = await supabase
+    .from("profiles")
+    .select("id, full_name, profile_slug, firm, title, city, bio, fmi_number, verification_status, subscription_status")
+    .eq("role", "agent")
+    .eq("profile_slug", slug)
+    .maybeSingle();
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    fullName: row.full_name,
+    slug: row.profile_slug,
+    firm: row.firm,
+    title: row.title,
+    city: row.city,
+    municipalities: [],
+    bio: row.bio ?? "",
+    fmiNumber: row.fmi_number ?? "",
+    verificationStatus: row.verification_status,
+    premium: row.subscription_status === "active",
+    soldCount: 0,
+    activeCount: 0,
+    profileViews: 0,
+  };
 }
 
 export async function getAnswersByAgent(agentId: string) {

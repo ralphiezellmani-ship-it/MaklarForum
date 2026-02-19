@@ -20,7 +20,6 @@ export function SiteFooter() {
           <h3 className="mb-2 font-semibold">Affär</h3>
           <div className="flex flex-col gap-1">
             <Link href="/priser">Priser</Link>
-            <Link href="/admin">Adminpanel</Link>
             <span className="text-[var(--muted)]">Support-SLA: 48 h vardagar</span>
           </div>
         </div>

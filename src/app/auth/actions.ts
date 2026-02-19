@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { toSlug } from "@/lib/format";
 
 const blockedPersonalDomains = new Set([
   "gmail.com",
@@ -121,11 +122,7 @@ export async function registerAgentAction(_: { error?: string } | undefined, for
   }
 
   if (data.user) {
-    const slug = `${fullName}-${city}`
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .trim()
-      .replace(/\s+/g, "-");
+    const slug = toSlug(`${fullName}-${city}`);
 
     await supabase.from("profiles").upsert({
       id: data.user.id,

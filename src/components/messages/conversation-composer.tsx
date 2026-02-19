@@ -16,6 +16,7 @@ export function ConversationComposer({
       <textarea
         name="body"
         required
+        maxLength={5000}
         placeholder="Skriv svar..."
         className="min-h-24 w-full rounded-xl border border-[var(--line)] bg-white p-3 text-sm"
       />

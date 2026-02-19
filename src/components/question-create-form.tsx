@@ -11,11 +11,11 @@ export function QuestionCreateForm() {
       <h2 className="text-xl">Ställ ny fråga</h2>
       <label className="block text-sm">
         Rubrik
-        <input name="title" required className="mt-1 w-full rounded-xl border border-[var(--line)] bg-white p-2" />
+        <input name="title" required maxLength={200} className="mt-1 w-full rounded-xl border border-[var(--line)] bg-white p-2" />
       </label>
       <label className="block text-sm">
         Frågetext
-        <textarea name="body" required className="mt-1 min-h-28 w-full rounded-xl border border-[var(--line)] bg-white p-2" />
+        <textarea name="body" required maxLength={10000} className="mt-1 min-h-28 w-full rounded-xl border border-[var(--line)] bg-white p-2" />
       </label>
       <div className="grid gap-3 md:grid-cols-3">
         <label className="block text-sm">

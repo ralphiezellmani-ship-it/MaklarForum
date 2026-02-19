@@ -28,7 +28,7 @@ export function MessageComposeForm({
       </label>
       <label>
         Meddelande
-        <textarea name="body" required className="mt-1 min-h-24 w-full rounded-xl border border-[var(--line)] p-2" />
+        <textarea name="body" required maxLength={5000} className="mt-1 min-h-24 w-full rounded-xl border border-[var(--line)] p-2" />
       </label>
       {state?.error ? <p className="text-red-700">{state.error}</p> : null}
       {state?.success ? <p className="text-emerald-700">{state.success}</p> : null}
